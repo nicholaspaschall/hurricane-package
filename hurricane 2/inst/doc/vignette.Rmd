@@ -1,0 +1,345 @@
+---
+title: "*Vignette*"
+output: rmarkdown::pdf_document
+vignette: >
+  %\VignetteIndexEntry{vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+```{r setup}
+library(hurricane)
+library(dplyr)
+library(ggplot2)
+```
+
+
+# **Track of all storms in 2020, 2021, and 2022.**
+
+```{r}
+# track of 2020 storms
+dat.2020 <- hurdat[grepl(2020, hurdat$date.time),]
+storm_name <- unique(dat.2020$name)
+year <- rep(2020, times=length(storm_name))
+map.2020 <- track_map(storm_name, year, hurdat) + 
+            theme(legend.text = element_text(size=5),
+            legend.key.size = unit(0.3, "cm"),
+            legend.title = element_text(size=1)) +
+  labs(title="Storm Tracks of 2020")
+
+print(map.2020)
+```
+
+\newpage
+
+```{r}
+# track of 2021 storms
+dat.2021 <- hurdat[grepl(2021, hurdat$date.time),]
+storm_name <- unique(dat.2021$name)
+year <- rep(2021, times=length(storm_name))
+map.2021 <- track_map(storm_name, year, hurdat) + 
+            theme(legend.text = element_text(size=5),
+            legend.key.size = unit(0.3, "cm"),
+            legend.title = element_text(size=1)) +
+  labs(title="Storm Tracks of 2021")
+print(map.2021)
+```
+
+\newpage
+
+```{r}
+# track of 2022 storms
+dat.2022 <- hurdat[grepl(2022, hurdat$date.time),]
+storm_name <- unique(dat.2022$name)
+year <- rep(2022, times=length(storm_name))
+map.2022 <- track_map(storm_name, year, hurdat) + 
+            theme(legend.text = element_text(size=5),
+            legend.key.size = unit(0.3, "cm"),
+            legend.title = element_text(size=1)) +
+  labs(title="Storm Tracks of 2022")
+print(map.2022)
+```
+
+\newpage
+
+# **Hurricanes Katrina, Sandy, Harvey, and Ian**
+### *Positions and sizes of hurricane Katrina (2005), Sandy (2012), Harvey (2017), and Ian (2022) where they made their strongest landfall.*
+
+```{r}
+katrina <- landfall("KATRINA", 2005, hurdat, method="landfall.strongest")
+sandy <- landfall("SANDY", 2012, hurdat, method="landfall.strongest")
+harvey <- landfall("HARVEY", 2017, hurdat, method="landfall.strongest")
+ian <- landfall("IAN", 2022, hurdat, method="landfall.strongest")
+
+storm_size( c("KATRINA", "SANDY", "HARVEY", "IAN"), 
+        c(2005, 2012, 2017, 2022), hurdat, 
+        c(katrina$date.time, sandy$date.time, harvey$date.time, ian$date.time),
+        path = TRUE ) + 
+  labs(title="Storm Sizes of Katrina, Sandy, Harvey, and Ian")
+```
+
+\newpage
+
+# **Individual storm information**
+### *Data frame containing information for each individual storm (1851-2022)*
+
+```{r}
+storm.id = unique(hurdat$id)
+storm.name <- c()
+storm.max.wind <- c()
+storm.min.pressure <- c()
+landfall.check <- c()
+ACE <- c()
+
+for( i in seq_along(storm.id) ){
+  tmp.dat <- hurdat[ which( hurdat$id == storm.id[i] ),]
+  storm.name[i] <- tmp.dat$name[1]
+  storm.max.wind[i] <- max( tmp.dat$max.wind )
+  storm.min.pressure[i] <- min(tmp.dat$min.pressure )
+  tmp.year <- substr( storm.id[i], 5, 8)
+  landfall.check[i] <- landfall( storm.id[i], tmp.year, hurdat, method="landfall.check")
+  ACE[i] <- cyclone_energy( storm.id[i], tmp.year, hurdat)
+}
+
+storm.info <- data.frame(
+  id = storm.id,
+  name = storm.name,
+  max.wind = storm.max.wind,
+  min.pressure = storm.min.pressure,
+  landfall = landfall.check,
+  ace = ACE )
+
+head(storm.info)
+```
+
+\newpage
+
+# **Analysis of interest**
+### *Examining name frequency.*
+
+One interesting thing about the dataset can be seen when looking at the names of the hurricanes. The naming of North Atlantic tropical cyclones is currently under the oversight of the Hurricane Committee of the World Meteorological Organization (WMO). This group maintains six alphabetic lists of twenty-one names, with one list used each year. The names on each list are used in alphabetical order for tropical storms and hurricanes. This usually results in each name being reused every six years. However, in the case when a storm is particularly deadly or damaging, that storm's name is retired, and a replacement starting with the same letter is selected to take its place. The decision whether to remove a name in a given season is made at the annual session of the WMO Hurricane Committee in the spring of the following year.
+
+Since the formal start of naming during the 1947 Atlantic hurricane season, an average of one Atlantic storm name has been retired each year, though many seasons (most recently 2014) did not have any names retired.
+
+The frequency of hurricane names can be seen below with Arlene, Florence, Cindy, and Dolly being the most commonly used name. Thanks Arlene, Florence, Cindy, and Dolly for not being so dangerous!
+
+```{r}
+storm.name.dat <- data.frame( name = storm.info$name )%>%
+    filter( name != "UNNAMED" ) %>%
+    count( name )
+
+ggplot( data = storm.name.dat, aes(x=name, y=n, label=name, color=n) ) +
+    geom_text(size=2, angle=45) +
+  theme_light() + scale_y_continuous(n.breaks=12) +
+  labs(y="Frequency", x="Storm Names", title="Storm Name Frequencies",
+       color="") +
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank() ) +
+  viridis::scale_color_viridis(option="turbo")
+```
+
+\newpage
+
+### *Examining average storm distance per year*
+
+The distances traveled in miles by each storm per year was also looked at. The distance was computed by taking the storm center's interpolated longitude and latitudes and summing the distance between each point. The distances were averaged between each storm, and, as shown below, revealed that the average distances are increasing with time. Linear regression was used to look at the relationship presenting the model: $Y_{i} = -4522.249 + 3.519*year$.
+
+```{r}
+storm.dat.dis <- data.frame( id = unique(hurdat$id ) )
+
+for( i in seq_along(storm.dat.dis$id) ){
+    tmp.dat <- hurdat %>% filter( id == storm.dat.dis$id[i] )
+    tmp.year <- substr( tmp.dat$id[1], 5, 8)
+    storm <- interp_track( tmp.dat$id[1], tmp.year, hurdat ) %>%
+        select( longitude, latitude )
+    dis <- fields::rdist.earth.vec(
+    storm[1:(nrow(storm)-1),], storm[2:nrow(storm),], miles=TRUE )
+    storm.dat.dis$distance[i] <- sum(dis)
+}
+storm.dat.dis$distance <- ifelse(is.na(storm.dat.dis$distance), 0, 
+                                 storm.dat.dis$distance)
+storm.dat.dis$year <- substr(storm.dat.dis$id, 5, 8)
+
+distance.df <- data.frame(year = as.numeric( unique(storm.dat.dis$year)) )
+for( i in seq_along(unique(distance.df$year)) ){
+    tmp.df <- storm.dat.dis %>% filter(year==unique(storm.dat.dis$year)[i])
+    distance.df$avg.distance[i] <- mean(tmp.df$distance)
+}
+
+#summary( lm( avg.distance~year, data=distance.df ) )
+
+ggplot(data=distance.df) +
+  geom_col(aes(x=year, y=avg.distance, fill=avg.distance)) +
+  stat_function(fun=function(year) -4522.249 + 3.519*year, 
+                aes(color="Regression Line:\n-4522.249 + 3.519*year"), lwd=1.2) +
+  scale_color_manual(values = "black", guide = guide_legend(title = "Regression Line")) +
+  theme_light() +
+  labs(x="Year", y="Average Distance",
+       title="Average Distance Storm Travels per Year", color="",
+       fill="Average Distance", subtitle="Distance recorded in miles") +
+  scale_y_continuous(n.breaks=10) +
+  scale_x_continuous(n.breaks=10) +
+  theme(panel.grid.major=element_blank()) +
+  viridis::scale_fill_viridis(option="turbo")
+```
+
+
+\newpage
+
+# **Landfalling hurricanes**
+### *landfalling hurricane frequency over the years*
+
+With the intent of determining if the number of landfalling hurricanes is increasing over time, the landfall function is quite valuable. To begin, we use the landfall function to determine the number of landfalling hurricanes each year using the storm.info data frame previously built.
+
+```{r}
+# gather range of years available in hurdat dataset
+storm.year.range <- range(hurdat$date.time)
+storm.years <- seq( 1851, 2022, by=1)
+
+# construct data frame for landfall data
+landfall.dat <- data.frame( year = storm.years )
+for( i in 1:nrow(landfall.dat ) ){
+  tmp.dat <- storm.info[ grepl( landfall.dat$year[i], storm.info$id), ]
+  landfall.dat$freq[i] <- sum( tmp.dat$landfall )
+  landfall.dat$total.storms[i] <- nrow( tmp.dat )
+  landfall.dat$rate[i] <- landfall.dat$freq[i] / landfall.dat$total.storms[i]
+}
+```
+
+With the landfall data at our disposal, we use a histogram to observe the number of landfalling hurricanes per year. The plot presents the frequency of hurricane landfalls from 1851 to 2022, with a range of zero to twelve occurrences. This histogram displays a higher frequency of landfalls concentrated in the later years indicating a reasonable argument that the number of landfalls per year is increasing.
+
+```{r}
+landfall.hist <- ggplot(data=landfall.dat ) +
+  geom_col(aes(x=year, y=freq, fill=cut(freq, 12))) +
+  labs(x="Year", y="Landfall", 
+       title="Landfalling Hurricanes per Year (1851-2022)", fill="Frequency") +
+  theme_light() + 
+  scale_y_continuous(n.breaks=7) + scale_x_continuous(n.breaks = 10)
+landfall.hist
+```
+
+To further investigate if the number of landfalling hurricanes is increasing over time, poisson regression is used to model landfall frequency on year. The following summary reveals an intercept estimate of -4.9510224 and a year estimate of 0.0032334 along with a significance level of 0.00143 and 5.14e-05, respectively. This gives us the model: $\ln(\mu) = -4.9510224 + 0.0032334*year$ where $\mu$ is the expected number of landfalls.
+
+```{r}
+landfall.mod <- glm( freq ~ year, data=landfall.dat, family=poisson)
+summary(landfall.mod)
+```
+
+This model shows an increasing trend in landfalling hurricanes per year as exhibited by the log-link and identity functions. The log link function is identified as $\ln(\mu) = -4.9510224 + 0.0032334*year$ and the identity function is identified as $\mu = -4.9510224 + 0.0032334*year$ where $\mu$ is the expected number of landfalling hurricanes.
+
+```{r}
+ggplot( data=landfall.dat, aes(x=year, y=freq) ) +
+  stat_function( aes(colour="Identity Link"), lwd=1.2,
+                 fun=function(year) exp(-4.9510224 + 0.0032334*year ) ) +
+  stat_function( aes(colour="Log Link"), lwd=1.2,
+                 fun=function(year) -4.9510224 + 0.0032334*year ) +
+  geom_point( aes(x=year, y=freq, fill="Observed Data")) +
+  scale_y_continuous( n.breaks=8 ) + scale_x_continuous( n.breaks = 10 ) +
+  theme_light() + labs( y="Landfall", x="Year",
+                        title="Hurricane Landfalls per Year (1851-2022)",
+                        color = "", fill="")
+```
+
+A confidence interval using the likelihood ratio method is constructed for year for further interpretation. The year estimate is exponentiated for easier interpretation. With an exponentiated confidence interval of (1.0017, 1.0048), a one year increase is associated with an expected increase in landfalls of 0.17% to 0.48%. Furthermore, a 25 year increase is associated with an expected increase in landfalls of 4.3% to 12.8%.
+
+```{r}
+CI <- confint( landfall.mod ) 
+exp( CI[2, ] )
+exp( 25 * CI[2, ] )
+```
+
+Based off this analysis, we conclude that the number of landfalling hurricanes is increasing per year.
+
+A brief investigation was conducted to understand why this is happening, and the total number of storms per year was plotted. The following plot shows a fairly significant increase per year which would make sense of this increasing landfall.
+
+```{r}
+ggplot( data=landfall.dat ) +
+  geom_point( aes(x=year, y=total.storms, color=cut(total.storms, 5)) ) +
+  geom_smooth(aes(x=year, y=total.storms), 
+              method=lm, se=FALSE, group=1, colour="grey40", alpha=0.1) +
+  labs(x="Year", y="Storms", 
+       title="Storms per Year (1851-2022)", color="Total Storms") +
+  scale_y_continuous(n.breaks=7) + scale_x_continuous(n.breaks=10) +
+  theme_light() + theme(panel.grid.minor = element_blank())
+```
+
+Other factors contributing to this growing amount of landfalling hurricanes could be climate change, improved technology, population growth and urbanization, and natural climate variability. Unfortunately, they can not be analyzed due to the limitations of the information within the hurdat data set.
+
+\newpage
+
+# **Intensity of tropical cyclones**
+### *understanding the behavior of tropical cyclones across time*
+
+The cyclone_energy function is a valuable tool for determining if the intensity of cyclones is increasing over time. To understand if the intensity is increasing, we look at the total accumulated cyclone energy generated from every storm each year. The storm.info dataframe offers the accumulated cyclone energy for each storm, which can be used to find the total accumulated cyclone energy per year. It is worth noting that the ACE calculated by the cyclone_energy function is based on storm measurements taken every six hours for storms with a maximum wind speed greater than 35.
+
+```{r}
+# gather range of years available in hurdat dataset
+storm.year.range <- range(hurdat$date.time)
+storm.years <- seq( 1851, 2022, by=1)
+
+# construct data frame for ACE data
+cyclone.dat <- data.frame( year = storm.years )
+for( i in 1:nrow( cyclone.dat ) ){
+  tmp.dat <- storm.info[ grepl( cyclone.dat$year[i], storm.info$id), ]
+  cyclone.dat$ace[i] <- sum( tmp.dat$ace )
+}
+```
+
+A line plot is used to visualize the total ACE per year. The total ACE ranges from 2 to 273 between 1851 to 2022 where one unit of ACE is equal to $10^{-4}kn^{-2}$. The data suggest a possible increasing trend.
+
+```{r}
+ggplot(data=cyclone.dat ) +
+  geom_path(aes(x=year, y=ace)) +
+  labs(x="Year", y="Accumulated Cyclone Energy", 
+       title="Average ACE per Year (1851-2022)") +
+  scale_y_continuous(n.breaks=7) + scale_x_continuous(n.breaks=10) +
+  theme_light() + theme(panel.grid.minor = element_blank())
+```
+
+Linear regression is used to model the total ACE on year to further examine this increasing relationship. The following summary displays an intercept estimate of -654.78611 and a year estimate of 0.38882 along with a significance level of 6.73e-05 and 5.32e-06, respectively. This produces the model: $Y_{i} = -654.78611 + 0.38882*year$ where $Y_{i}$ is the average ACE.
+
+```{r}
+cyclone.mod <- lm( ace ~ year, data=cyclone.dat )
+summary(cyclone.mod)
+```
+
+The linear regression line displays the increasing relationship between the total accumulated cyclone energy and year. 
+
+```{r}
+ggplot(data=cyclone.dat ) +
+  stat_function( fun=function(year) -654.78611 + 0.38882*year, 
+                 aes(color="Regression Line") ) + 
+  geom_point(aes(x=year, y=ace, fill="Total ACE")) +
+  scale_y_continuous(n.breaks=7) + scale_x_continuous(n.breaks=10) +
+  theme_light() + theme(panel.grid.minor = element_blank()) +
+  labs(x="Year", y="Accumulated Cyclone Energy", 
+       title="Total ACE per Year (1851-2022)",
+       colour="", fill="")
+```
+
+A 95% confidence interval is constructed for year for further interpretation. The confidence interval suggests that every year, the total accumulated cyclone energy increase on average by 0.227 to 0.551. Furthermore, every 25 years, the average accumulated cyclone energy decreases on average by 5.67 to 13.77.
+
+```{r}
+( CI <- c(0.38882 - 1.96*0.08271, 0.38882 + 1.96*0.08271) )
+( 25*CI )
+```
+
+Based off this analysis, we conclude that the total accumulated cyclone energy is increasing each year.
+
+Accumulated Cyclone Energy (ACE) is influenced by a variety of factors such as sea surface temperature, wind shear, humidity, and atmospheric instability. These factors can affect the intensity, duration, and frequency of tropical cyclones, all of which contribute to ACE. Additionally, climate change is thought to be contributing to the increase in ACE as warmer sea surface temperatures provide more energy to storms, leading to more intense and frequent tropical cyclones.
+
+\newpage
+
+# **The Storm Media**
+### *media regarding the relationships between tropical cyclones and climate change*
+
+The Center for Climate and Energy Solutions claims that climate change is worsening hurricane impacts in the United States by increasing the intensity and decreasing the speed at which they travel. These trends are resulting in hurricanes being far more costly in terms of both physical damages and deaths. Hurricanes are subject to a number of climate change-related influences such as warmer sea surface temperatures, sea levels rising, changes in the atmosphere, and the warming of mid-latitudes that could be changing the pattern of tropical storms. 
+
+ChatGPT builds on this claim stating warmer sea surface temperatures provide more energy for these storms to grow and strengthen, leading to more frequent and intense storms. As sea levels continue to rise due to climate change, tropical cyclones are able to produce higher storm surges that can cause more extensive flooding in coastal areas. There is some evidence to suggest that climate change is affecting the paths that tropical cyclones take. Some studies have found that storms are moving more slowly and stalling in certain areas for longer periods, which can lead to more widespread and prolonged impacts from wind and flooding.
+
+This claim is supported by the data we have analyzed. This can be seen in the plot above that shows Total Accumulated Cyclone Energy per year from 1851-2022 increasing over time. According to NOAA's 2021 Annual Climate Report, the combined land and ocean temperature has increased at an average rate of 0.14 degrees Fahrenheit per decade since 1880, and the average rate of increase since 1981 has been more than twice as fast: 0.32 °F per decade. Consistent with the previously made claim, this increased temperature/worsened climate change and increased ACE over time leads us to suspect correlation between the two. 
