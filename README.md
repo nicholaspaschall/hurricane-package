@@ -2,6 +2,8 @@
 
 R package for performing analysis related to the HURDAT Atlantic basin tropical cyclone data. 
 
+The package can be used by downloading the **hurricane_0.1.0.tar.gz** file. Once downloaded, in R, navigate to the correct directory where that file can be found, and set this as the current working directory. The package can then be used by using the following code: *install.packages(hurricane_0.1.0.tar.gz)*.
+
 This package includes the necessary dataset, **HURDAT**, along with five functions: **interp_track**, **storm_size**, **track_map**, **cyclone_energy**, and **landfall**. The description of each are as follows.
 
 
